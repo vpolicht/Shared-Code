@@ -1,18 +1,17 @@
 % Load in the data S(t1,t2,w3) and perform the FFT to obtain S(w1,t2,w3)
 % Saves out the data in the form of S(t2,w1,w3)
-% Veronica Policht, 2020
+% Veronica Policht, 10/2020
 
 % This scipt requires a small amount of user input:
     % When prompted, you must select a "bin0" to define t1 = 0 fs
     % When prompted, you must select whether to window t1 with a Guassian
         % or tukey window function
 
- clear all
- close all
+ clear;
+ close all;
  clc;
  
  c = 299.792458; % Speed of light in nm/fs
- WhichOS;
  %% Modify variables in this section
  
  % Where is the data
