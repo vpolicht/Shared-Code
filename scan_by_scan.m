@@ -23,7 +23,7 @@ c = 299.792458; % Speed of light in nm/fs
 % Where is the data
 foldername = ['/Volumes/Utini/Data/V2O3/7-24-2020/'];
 % Data set name
-dataname = '2D_V2O3-spot1-100K-470flu-100ps-1';
+dataname = '2D_V2O3-spot2-100K-220flu-100ps-1';
  
 % Calibration set name
 calibname = '2DVIS-4_CALIB';
@@ -315,7 +315,7 @@ nav = length(avnum);
 
 %%
 % Pick a t2 value to load in
-tvalue = 100;
+tvalue = 100000;
 tind = dsearchn(time',tvalue);
 
 % Read in one file to define the motor step and probe wavelength
@@ -660,7 +660,7 @@ ppa = sum(squeeze(ftint(tind,:,:)),2);
 nvec = 1:nav;
 pbckg = smoothdata(ppa,'movmean',floor(nav/10));
 ppb = ppa - pbckg;
-pout = isoutlier(ppb,'threshold',2);
+pout = isoutlier(ppb,'threshold',1.5);
 
 figure(1); clf(1); hold all;
 plot(nvec,ppb)
@@ -672,7 +672,7 @@ legend('Background subtracted average PP signal','Outlier scans','location','nor
 
 reav = nvec(~pout);
 nvec = nvec(reav);
-
+%%
 if rmman
     %%
     wl1lm = dsearchn(wl1',[pulm(end)+100 pulm(1)-100]');
@@ -768,7 +768,7 @@ for m = 1:length(time)
     parfor n = 1:length(nvec)
 
         filename = [dataname '_' num2str(ttx) 'fs_' num2str(nvec(n)) '.bin'];
-        temp = read_bin([datfolder sla filename]);
+        temp = read_bin([datfolder filename]);
 
         data = squeeze(temp(4:end,3:end)) + data;
         
@@ -780,7 +780,8 @@ for m = 1:length(time)
     avphi{m} = phint./length(nvec);
 end
 
-%%
+%% Save the newly averaged data in a S(t2,t1,l3)
+
 matfile = [foldername dataname '.mat'];
 matsavefile = [foldername dataname '_av' num2str(length(nvec)) '.mat'];
 
@@ -801,5 +802,3 @@ else
     
     save(matsavefile,'Data','PhInt','T2','NumScans','wpr','mStep');
 end
-
-    
