@@ -201,9 +201,9 @@ PhIntSpecFilt = ySpecfilt;
 
 %% Butterworth filter design order=2, bandpass (0.008-0.2)   
 
-[b,a] = butter(2,[0.008 0.2],'bandpass');
-PhIntCalFilt = filter(b,a,PhIntCalFilt);
-PhIntSpecFilt = filter(b,a,PhIntSpecFilt);
+% [b,a] = butter(2,[0.008 0.2],'bandpass');
+% PhIntCalFilt = filter(b,a,PhIntCalFilt);
+% PhIntSpecFilt = filter(b,a,PhIntSpecFilt);
 
 % code to change bin0 reference
 PhIntCalFilt = PhIntSpecFilt;
