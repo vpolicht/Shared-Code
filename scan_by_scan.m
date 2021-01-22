@@ -1,51 +1,43 @@
-% Look for spectral drift during an experiment (look at the scan by scan
-% data) and then reaverage over a select part of the scans.
-% Script currently requires read_bin.m and sgauss.m to run.
-% V Policht, 10/2020
+ % Look for spectral drift during an experiment 
+% (Look at the scan by scan data)
 
-% This scipt requires a small amount of user input:
-    % When prompted, you must select a "bin0" to define t1 = 0 fs
-    % When prompted, you must select whether to window t1 with a Guassian
-        % or tukey window function
-    % When prompted, you must select a subplot where you will select which
-        % scans to average over in creating a new .mat data file.
-        
 clear;
 close all;
 clc;
 
-c = 299.792458; % Speed of light in nm/fs
-
+WhichOS;
 %%
 
 % Use these to define the folder where the data is and also what to name
 % figures
-% Where is the data
-foldername = ['/Volumes/Utini/Data/V2O3/7-24-2020/'];
-% Data set name
-dataname = '2D_V2O3-spot2-100K-220flu-100ps-1';
- 
-% Calibration set name
-calibname = '2DVIS-4_CALIB';
+proj = 'Test Dye';
+subproj = '';
+twist = '';
+date = '1-19-2021';
+tdname = '2D_graphite-spot5-glass-40fs-1';
+
+% Which pump calibration file
+calibname = '2DVIS-3_CALIB';
  
 % Make an initial guess at the t1 axis
 tlim = [-30 220]; % Motor t1 in fs
 
 % Pump limits (nm)
-pulm = [490 620];
+pulm = [480 580];
 % Probe limits (nm)
-prlm = [490 620];
+prlm = [480 580];
 
 % Starting bin0
-bin0 = 100;
+bin0 = 175;
 
 % If you want to select data to reaverage: 0 - no, 1 - yes
 rmman = 1;
 
 %% Load and modify Calibration
 
+foldname = [basefolder sla proj sla subproj sla date sla];
 % Load data
-calib = load([foldername calibname '.dat']);
+calib = load([foldname calibname '.dat']);
 
 phint = calib(4:end,2);
 datcal = calib(4:end,3:end);
@@ -145,7 +137,7 @@ unwrapd = 1;
 srx = length(mstepcal);
 
 padsize = 2^(nextpow2(srx)+1) - srx;
-phintpad = padarray(phint,padsize,'post');
+phintpad = padarray(phintlm,padsize,'post');
 
 nfft = length(phintpad);
 f_fft = ((1/dx)/2).*linspace(0,1,nfft/2+1);
@@ -203,12 +195,12 @@ end
 x0 = find(abs(phintsft) >= max(abs(phintsft)));
 %% Pick a filter type for along t1
 
-datcal = calib(4:end,3:end);
-datcal = datcal(bin0:end,w3lb:w3ub);
-datcal(isnan(datcal)) = 0;
-datcal = datcal - mean(datcal,1);
+% datcal = calib(4:end,3:end);
+% datcal = datcal(:,w3lb:w3ub);
+% datcal(isnan(datcal)) = 0;
+% datcal = datcal - mean(datcal,1);
 
-SRX = length(bin0:length(mstepcal));
+SRX = length(mstlm);%length(bin0:length(mstepcal));
 nmr = @(a) a./max(a);
 
 figure(2); clf(2); hold all;
@@ -233,22 +225,26 @@ plot(1:SRX,filt)
 plot(1:SRX,nmr(sum(datcal.*filt,2)))
 
 dcalfilt = datcal.*filt;
+dcalpd = padarray(dcalfilt,padsize,'post');
 %%
 
-filtpd = zeros(2*srx,1);
-tmpax = 1:2*srx;
-fact = .8;
+% filtpd = zeros(2*srx,1);
+% tmpax = 1:2*srx;
+% fact = .8;
 
-if ~filtype
-    filtpd = gaussmf(tmpax,[fact*srx/2 srx+x0-1]);
-else
-    filtpd = tukeywin(2*srx,fact);
-end
+% if ~filtype
+%     filtpd = gaussmf(tmpax,[fact*srx/2 srx+x0-1]);
+% else
+%     filtpd = tukeywin(2*srx,fact);
+% end
 
-filtpd = filtpd(srx+1:end);
-filtpd = nmr(filt);
+% filtpd = filtpd(srx+1:end);
+% filtpd = nmr(filt);
 
-ftphi = fft(-1.*phint(bin0:end).*filtpd,nfft);
+phnft = phintlm.*filt;
+phlmpd = padarray(phnft,padsize,'post');
+
+ftphi = fft(circshift(phlmpd,-bin0),nfft);
 ftphi = abs(ftphi(1:nfft/2+1));
 
 figure(1); clf(1); hold all;
@@ -256,28 +252,32 @@ plot(wl1,ftphi./max(ftphi))
 plot(wlcal,pumpspec./max(pumpspec))
 xlim(pulm)
 
-ftdcal = fft(dcalfilt,nfft);
+ftdcal = fft(dcalpd,nfft);
 ftdcal = abs(ftdcal(1:nfft/2+1,:));
 
 figure(2); clf(2); hold all
 tmp = sum(ftdcal,2);
-plot(wl1,tmp./max(tmp))
-plot(wlcal,pumpspec./max(pumpspec))
-plot(wl1,ftphi./max(ftphi))
+plot(1240./wl1,tmp./max(tmp))
+plot(1240./wlcal,pumpspec./max(pumpspec))
+
+plot(1240./wl1,ftphi./max(ftphi))
 legend('Calibrated FT','Pump Spectrum','PD FT')
-xlim([400 1000]); xlabel('Wavelength (nm)')
+xlim([1240./[1000 400]]); xlabel('Wavelength (nm)')
 set(gca,'box','on')
 set(gcf,'color','w')
 title(calibname)
 
-saveas(gcf,[foldername 'calibrated_' calibname '.fig'])
-saveas(gcf,[foldername 'calibrated_' calibname '.png'])
+saveas(gcf,[basefolder sla proj sla subproj sla date sla 'calibrated_' calibname '.fig'])
+saveas(gcf,[basefolder sla proj sla subproj sla date sla 'calibrated_' calibname '.png'])
 
 %% Load in the scan by scan 2D data
 
 % *Define folder path
-datfolder = [foldername 'temp/'];
-
+if ~isempty(subproj)
+    datfolder = [basefolder sla proj sla subproj sla date sla 'temp'];
+else
+    datfolder = [basefolder sla proj sla date sla 'temp'];
+end
 
 files = dir(datfolder);
 files(1:3) = [];
@@ -286,7 +286,7 @@ files(1:3) = [];
 count = 1;
 for m = 1:length(files)
     
-    if contains(files(m).name,dataname) && contains(files(m).name,'.bin')
+    if contains(files(m).name,tdname) && contains(files(m).name,'.bin')
         bfile(count) = files(m);
         count = count+1;
     end
@@ -319,7 +319,7 @@ tvalue = 100000;
 tind = dsearchn(time',tvalue);
 
 % Read in one file to define the motor step and probe wavelength
-temp = read_bin([datfolder bfile(1).name]);
+temp = read_bin([datfolder sla bfile(1).name]);
 mstep = temp(4:end,1);
 wpr = temp(1,3:end);
 srx = length(mstep);
@@ -332,8 +332,8 @@ phint = zeros(nt2,nav,length(mstep)); % Define pump-pump interferogram
 for m = tind
     parfor n = 1:nav
         
-        filename = [dataname '_' num2str(time(m)) 'fs_' num2str(avnum(n)) '.bin'];
-        temp = read_bin([datfolder filename]);
+        filename = [tdname '_' num2str(time(m)) 'fs_' num2str(avnum(n)) '.bin'];
+        temp = read_bin([datfolder sla filename]);
         
         phint(m,n,:) = temp(4:end,2); % Pump-pump interferogram
        
@@ -366,11 +366,15 @@ for M = tind
     title(['t_2 = ' num2str(time(M)) ' fs'])
 
     % Fourier transform over motor steps
-    ftint = zeros(nt2,nav,nfft/2+1);
+    ftint = zeros(nt2,nav,floor(nfft/2+1));
 
     for m = 1:nt2
         parfor n = 1:nav
-            temp = fft(squeeze(phint(m,n,:)),nfft);
+            tmp = squeeze(phint(m,n,:));
+            tmp = tmp(t1lb:t1ub);
+            tmpf = tmp.*filt;
+            tmfpd = padarray(tmpf,padsize,'post');
+            temp = fft(tmfpd,nfft);
             ftint(m,n,:) = abs(temp(1:nfft/2+1));
         end
     end
@@ -412,38 +416,25 @@ for M = tind
     title(['t_2 = ' num2str(time(M)) ' fs'])    
     xlim(pulm)
  
+bfold = [basefolder sla proj sla subproj sla date sla tdname sla];
+save([bfold 'scan-by-scan_PPI_stats.mat'],'tm2','mn','sd','wl1','phint','mstep');
+
 end
-
-%% Determine expertimental time in lab frame
-
-for n = 1:nav
-    filename = [dataname '_' num2str(time(end)) 'fs_' num2str(avnum(n)) '.bin'];
-    temp = dir([datfolder filename]);
-    dtm{n} = datestr(temp.datenum,13);
-    cp = strfind(dtm{n},':');
-    hms(n,:) = [str2num(dtm{n}(1:cp(1)-1)) str2num(dtm{n}(cp(1)+1:cp(2)-1))...
-     str2num(dtm{n}(cp(2)+1:end))];
-    mn(n) = hms(n,1)*60 + hms(n,2) + hms(n,3)/60;
-    
-    labtime(n) = hms(n,1) + hms(n,2)/60 + hms(n,3)/(60*60);
-end
-
-actime = mean(abs(diff(mn))); % Time between scans of the same t2 in min
-midnight = dsearchn(labtime',0);
-labtime(midnight:end) = labtime(midnight:end) + 24;
 
 %% Look at the 2D signal as a function of average number for a specific t2
 
 dat = zeros(nav,srx*sry);
 
 parfor n = 1:nav
-    filename = [dataname '_' num2str(time(tind)) 'fs_' num2str(avnum(n)) '.bin'];
-    temp = read_bin([datfolder  filename]);
+    filename = [tdname '_' num2str(time(tind)) 'fs_' num2str(avnum(n)) '.bin'];
+    temp = read_bin([datfolder sla filename]);
 
     dat(n,:) = reshape(temp(4:end,3:end),srx*sry,1);
 end
 
 %%
+
+ifftsub = 1;
 
 % Wavelength limits for the probe axis
 ylb = dsearchn(wpr',prlm(1));
@@ -458,42 +449,50 @@ dw = mean(abs(diff(w1)));
 % Define variables
 clear ftmp pp mx v1l3 corr ftcorr tmp3
 ftmp = zeros(nav,length(xlb:xub),length(ylb:yub));
-t1l3 = zeros(nav,srx,length(ylb:yub));
+t1l3 = zeros(nav,SRX,length(ylb:yub));
 corr = zeros(nav,length(xlb:xub));
 ftcorr = zeros(nav,length(xlb:xub),length(ylb:yub));
 
 for m = 1:nav
-    clear tmp tmp2 tmp3 tmp4 datasub t1filt B
+   clear tmp tmp2 tmp3 tmp4 datasub t1filt B
+    
+   tmp = reshape(dat(m,:),srx,sry);
+   t1l3(m,:,:) = tmp(t1lb:t1ub,ylb:yub); 
+   
+   if ifftsub
+       tmpift = fft(tmp,nfft,1);
+       
+        B = pulm(1) + (pulm(end)-pulm(1))/2;
+        B = (c*1e15)/B;
+        t1filt = sgauss(w1,75*dw,B,6);
+        t1filt = cat(2,t1filt,fliplr(t1filt(2:end)))';
+                
+        datasub = ifft(tmpift.*t1filt,nfft,1);   
+        t1l3(m,:,:) = datasub(1:SRX,:);
+   else
+       t1l3(m,:,:) = t1l3(m,:,:) - mean(t1l3(m,:,:),2);
+   end
+   
+%    t1l3(m,:,:) = circshift(squeeze(t1l3(m,:,:)).*filt,-bin0);
+   tmp2 = circshift(squeeze(t1l3(m,:,:)).*filt,-bin0);
+   tmp3 = padarray(squeeze(t1l3(m,:,:)),padsize,'post');
+   tmp4 = fft(tmp3,nfft,1); % FFT 2D(nav,t1,l3) --> 2D(nav,l1,l3)
+   ftcorr(m,:,:) = abs(tmp4(xlb:xub,:)); % Keep only some l1
+   corr(m,:) = sum(ftcorr(m,:,:),3); % Sum over probe wl
 
-    tmp = reshape(dat(m,:),srx,sry);
-    t1l3(m,:,:) = tmp(:,ylb:yub); 
-
-    tmpift = fft(squeeze(t1l3(m,:,:)),nfft,1);
-
-    B = pulm(1) + (pulm(end)-pulm(1))/2;
-    B = (c*1e15)/B;
-    t1filt = sgauss(w1,75*dw,B,6);
-    t1filt = cat(2,t1filt,fliplr(t1filt(2:end-1)))';
-
-    datasub = ifft(tmpift.*t1filt,nfft,1);   
-    t1l3(m,:,:) = datasub(1:srx,:);
-
-    tmp4 = fft(t1l3(m,:,:),nfft,2); % FFT 2D(nav,t1,l3) --> 2D(nav,l1,l3)
-    ftcorr(m,:,:) = abs(tmp4(:,xlb:xub,:)); % Keep only some l1
-    corr(m,:) = sum(ftcorr(m,:,:),3); % Sum over probe wl
-
-    pp(m,:) = sum(squeeze(ftcorr(m,:,:)),1); % Sum over the pump wl
-    mx(m) = max(max(squeeze(ftcorr(m,:,:)))); % Find the maximum for each scan
+   pp(m,:) = sum(squeeze(ftcorr(m,:,:)),1); % Sum over the pump wl
+   mx(m) = max(max(squeeze(ftcorr(m,:,:)))); % Find the maximum for each scan
 end
 
 %%
-tmphi = mean(squeeze(phint(tind,:,:)),1); % Look at PPI for t2 of interest
+msteplm = mstep(t1lb:t1ub);
+tmphi = mean(squeeze(phint(tind,:,t1lb:t1ub)),1); % Look at PPI for t2 of interest
 dcorr = sum(mean(t1l3,1),3); % Mean of the scans, sum over probe wl
 
 figure(2); clf(2);
 hold all;
-plot(mstep,tmphi./max(tmphi))
-plot(mstep,dcorr./max(dcorr))
+plot(msteplm,tmphi./max(tmphi))
+plot(msteplm,dcorr./max(dcorr))
 set(gca,'box','on','layer','top')
 set(gcf,'color','w')
 xlabel('Motor Step')
@@ -502,13 +501,13 @@ title(['t_2 = ' num2str(time(tind)) ' fs'])
 % legend({['PPI for t_2 = ' num2str(time(tind)) ' fs']},{'FFT Data, Mean over n_{av}, sum over \lambda_3'})
 
 sumephi = sum(squeeze(ftint(tind,:,:)),1); % Select t2 and sum over pump wl
-mnphi = mean(squeeze(ftint(tind,:,3:10:end)),1); % take mean
-stphi = std(squeeze(ftint(tind,:,3:10:end)),1); % take STD
+mnphi = mean(squeeze(ftint(tind,:,3:2:end)),1); % take mean
+stphi = std(squeeze(ftint(tind,:,3:2:end)),1); % take STD
 
 sumcorr = sum(corr,1); % Sum over scans
-mncorr = mean(corr(:,1:10:end),1); % Take mean
+mncorr = mean(corr(:,1:2:end),1); % Take mean
 mncorr = mncorr - min(mncorr); % Offset mean
-stcorr = std(corr(:,1:10:end),1); % Take STD
+stcorr = std(corr(:,1:2:end),1); % Take STD
 
 %%
 
@@ -521,7 +520,11 @@ ww1 = wl1(lb:ub);
 skipgif = 0; % If you don't want to make the gif, enter 1
 
 % Define where to save the figures
-figfold = [foldername dataname '/Figures/'];
+if ~isempty(subproj)
+    figfold = [basefolder sla proj sla subproj sla date sla tdname sla 'Figures'];
+else
+    figfold = [basefolder sla proj sla date sla tdname sla 'Figures'];
+end
 
 % Make if doesn't exist
 if ~exist(figfold,'dir')
@@ -530,10 +533,10 @@ end
 
 % Start writing the .gif and .mp4
 if ~skipgif
-    gifname = [figfold dataname '_scannumber.gif'];
+    gifname = [figfold sla tdname '_scannumber.gif'];
     dt = .1;
 
-    writerObj = VideoWriter([figfold dataname '_scannumber.mp4'],'MPEG-4');
+    writerObj = VideoWriter([figfold sla tdname '_scannumber.mp4'],'MPEG-4');
     writerObj.FrameRate = 5;
     open(writerObj);
 end
@@ -567,8 +570,8 @@ for M = 1:nav
         ax = gca;
         ax.ColorOrderIndex = 1;
 
-        errorbar(wl1(3:10:end),mnphi./max(mnphi),stphi./max(mnphi),'linewidth',1)
-        errorbar(wl1(xlb:10:xub),mncorr./max(mncorr),stcorr./max(mncorr),'linewidth',1)
+        errorbar(wl1(3:2:end),mnphi./max(mnphi),stphi./max(mnphi),'linewidth',1)
+        errorbar(wl1(xlb:2:xub),mncorr./max(mncorr),stcorr./max(mncorr),'linewidth',1)
 
         ax.ColorOrderIndex = 4;
         plot(ww1,ppi,'linewidth',2)
@@ -636,7 +639,7 @@ ylabel('FFT FWHM (nm)')
 title(['t_2 = 100 ps'])
 legend('PPI','2D Data')
 
-figname = [figfold dataname '_fftwidths-100ps'];
+figname = [figfold sla tdname '_fftwidths-100ps'];
 print([figname '.png'],'-dpng');
 
 %%
@@ -658,9 +661,14 @@ close all;
 
 ppa = sum(squeeze(ftint(tind,:,:)),2);
 nvec = 1:nav;
-pbckg = smoothdata(ppa,'movmean',floor(nav/10));
+smf = floor(nav/10);
+if ~smf
+    smf = 1;
+end
+
+pbckg = smoothdata(ppa,'movmean',smf);
 ppb = ppa - pbckg;
-pout = isoutlier(ppb,'threshold',1.5);
+pout = isoutlier(ppb,'threshold',2);
 
 figure(1); clf(1); hold all;
 plot(nvec,ppb)
@@ -672,9 +680,11 @@ legend('Background subtracted average PP signal','Outlier scans','location','nor
 
 reav = nvec(~pout);
 nvec = nvec(reav);
-%%
+
 if rmman
     %%
+    clear a b
+    
     wl1lm = dsearchn(wl1',[pulm(end)+100 pulm(1)-100]');
     pwl1 = wl1(wl1lm(1):wl1lm(end));
     
@@ -689,7 +699,7 @@ if rmman
         tmpp = ppitr(n,:);
         tmpp = tmpp./max(tmpp);
         lb(n) = pwl1(ml(n)+1+find(tmpp(ml(n)+1:end) < 0.57 & tmpp(ml(n)+1:end) > 0.43,1));
-        ub(n) = pwl1(find(tmpp(1:ml(n)) < 0.57 & tmpp(1:ml(n)) > 0.43,1,'last'));
+        ub(n) = pwl1(find(tmpp(1:ml(n)) < 0.58 & tmpp(1:ml(n)) > 0.42,1,'last'));
         wid(n) = (ub(n)) - (lb(n));
     end
     
@@ -721,33 +731,38 @@ if rmman
     set(gca,'box','on','ygrid','on','yminorgrid','on')
     title('FFT PPI (Pump spectrum) FWHM')
   
-    num = input('Select subplot to select scans from: 1 - Peak location, 2 - FWHM\n');
+    num = input('Select subplot to select scans from\n');
     if num == 1
         subplot(2,1,1)
     end
     
     for n = 1:4
        
-        fprintf('Draw rectangle (4 points) around the scans you want to keep\n')
+        fprintf('Draw rectangle around the scans you want to keep\n')
         [a(n) b(n)] = ginput(1);
         plot(a(n),b(n),'k.')
         
         if n > 1
-            line([a(n) a(n-1)],[b(n) b(n-1)],'color','k')
+            line([a(n) a(n-1)],[b(n) b(n-1)])
         end
         
         if n == 4
-            line([a(1) a(n)],[b(1) b(n)],'color','k')
+            line([a(1) a(n)],[b(1) b(n)])
         end
     end
         
     slm = [min(round(a)) max(round(a))];
+    
+    if slm(1) == 0
+        slm(1) = 1;
+    end
+    
     wlm = [min(round(b)) max(round(b))];
     
     if num == 1
-        inds = find(mloc <= wlm(end) & mloc >= wlm(1));
+        inds = find(mloc(slm(1):slm(end)) <= wlm(end) & mloc(slm(1):slm(end)) >= wlm(1));
     else
-        inds = find(wid <= wlm(end) & wid >= wlm(1));
+        inds = find(wid(slm(1):slm(end)) <= wlm(end) & wid(slm(1):slm(end)) >= wlm(1));
     end
     
     nvec = nvec(inds);    
@@ -767,8 +782,8 @@ for m = 1:length(time)
 
     parfor n = 1:length(nvec)
 
-        filename = [dataname '_' num2str(ttx) 'fs_' num2str(nvec(n)) '.bin'];
-        temp = read_bin([datfolder filename]);
+        filename = [tdname '_' num2str(ttx) 'fs_' num2str(nvec(n)) '.bin'];
+        temp = read_bin([datfolder sla filename]);
 
         data = squeeze(temp(4:end,3:end)) + data;
         
@@ -780,10 +795,9 @@ for m = 1:length(time)
     avphi{m} = phint./length(nvec);
 end
 
-%% Save the newly averaged data in a S(t2,t1,l3)
-
-matfile = [foldername dataname '.mat'];
-matsavefile = [foldername dataname '_av' num2str(length(nvec)) '.mat'];
+%%
+matfile = [foldname tdname '.mat'];
+matsavefile = [foldname tdname '_av' num2str(length(nvec)) '.mat'];
 
 if exist(matfile,'file')
     load(matfile);
@@ -799,6 +813,9 @@ else
     Data = avdat;
     T2 = time;
     PhInt = avphi;
+    mStep = mstep;
     
     save(matsavefile,'Data','PhInt','T2','NumScans','wpr','mStep');
 end
+
+    
